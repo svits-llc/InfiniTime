@@ -17,6 +17,7 @@
 #include "displayapp/screens/InfiniPaint.h"
 #include "displayapp/screens/Paddle.h"
 #include "displayapp/screens/StopWatch.h"
+#include "displayapp/screens/ThinClient.h"
 #include "displayapp/screens/Metronome.h"
 #include "displayapp/screens/Music.h"
 #include "displayapp/screens/Navigation.h"
@@ -527,6 +528,9 @@ void DisplayApp::LoadScreen(Apps app, DisplayApp::FullRefreshDirections directio
       break;
     case Apps::Paddle:
       currentScreen = std::make_unique<Screens::Paddle>(lvgl);
+      break;
+    case Apps::ThinClient:
+      currentScreen = std::make_unique<Screens::ThinClient>(*systemTask, lvgl, systemTask->nimble().thinClient());
       break;
     case Apps::Music:
       currentScreen = std::make_unique<Screens::Music>(systemTask->nimble().music());

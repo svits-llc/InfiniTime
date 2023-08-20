@@ -392,6 +392,7 @@ list(APPEND SOURCE_FILES
         displayapp/screens/FirmwareValidation.cpp
         displayapp/screens/ApplicationList.cpp
         displayapp/screens/Notifications.cpp
+        displayapp/screens/ThinClient.cpp
         displayapp/screens/Twos.cpp
         displayapp/screens/HeartRate.cpp
         displayapp/screens/Motion.cpp
@@ -462,6 +463,7 @@ list(APPEND SOURCE_FILES
         components/ble/CurrentTimeService.cpp
         components/ble/AlertNotificationService.cpp
         components/ble/MusicService.cpp
+        components/ble/thinClient/ThinClientService.cpp
         components/ble/weather/WeatherService.cpp
         components/ble/NavigationService.cpp
         components/ble/BatteryInformationService.cpp
@@ -529,6 +531,7 @@ list(APPEND RECOVERY_SOURCE_FILES
         components/ble/CurrentTimeService.cpp
         components/ble/AlertNotificationService.cpp
         components/ble/MusicService.cpp
+        components/ble/thinClient/ThinClientService.cpp
         components/ble/weather/WeatherService.cpp
         components/ble/BatteryInformationService.cpp
         components/ble/FSService.cpp
@@ -778,7 +781,7 @@ link_directories(
 
 
 set(COMMON_FLAGS -MP -MD -mthumb -mabi=aapcs -ftree-vrp -ffunction-sections -fdata-sections -fno-strict-aliasing -fno-builtin -fshort-enums -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -fstack-usage -fno-exceptions -fno-non-call-exceptions)
-set(WARNING_FLAGS -Wall -Wextra -Warray-bounds=2 -Wformat=2 -Wformat-overflow=2 -Wformat-truncation=2 -Wformat-nonliteral -Wno-missing-field-initializers -Wno-unknown-pragmas -Wno-expansion-to-defined -Wreturn-type -Werror=return-type -Werror)
+set(WARNING_FLAGS -Wall -Wextra -Warray-bounds=2 -Wformat=2 -Wformat-overflow=2 -Wformat-truncation=2 -Wformat-nonliteral -Wno-missing-field-initializers -Wno-unknown-pragmas -Wno-expansion-to-defined -Wreturn-type -Werror=return-type -Werror -Wno-narrowing)
 set(DEBUG_FLAGS -Og -g3)
 set(RELEASE_FLAGS -Os)
 set(CXX_FLAGS -fno-rtti)
