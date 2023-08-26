@@ -24,20 +24,44 @@ bool ThinClient::OnTouchEvent(uint16_t /*x*/, uint16_t /*y*/) {
   return true;
 }
 
-void ThinClient::DrawScreen(lv_color_t* buffer) {
-  lv_area_t area = {
-    .x1 = 0,
-    .y1 = currentLine,
-    .x2 = LV_HOR_RES_MAX - 1,
-    .y2 = currentLine + 3
-  };
+void ThinClient::DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count) {
+  uint16_t offsetEnd = offset + count;
 
-  lvgl.SetFullRefresh(Components::LittleVgl::FullRefreshDirections::None);
-  lvgl.FlushDisplay(&area, buffer);
+  uint16_t startLine = offset / LV_HOR_RES_MAX;
+  uint16_t endLine = offsetEnd / LV_HOR_RES_MAX;
+  for (uint16_t currLine = startLine; currLine <= endLine; currLine++) {
+    lv_area_t area = {
+      .x1 = 0,
+      .y1 = currLine,
+      .x2 = LV_HOR_RES_MAX - 1,
+      .y2 = currLine
+    };
+    if (currLine == startLine)
+      area.x1 = offset % LV_HOR_RES_MAX;
+    if (currLine == endLine)
+      area.x2 = offsetEnd % LV_HOR_RES_MAX;
+    lvgl.SetFullRefresh(Components::LittleVgl::FullRefreshDirections::None);
+    lvgl.FlushDisplay(&area, buffer);
+    buffer += area.x2 - area.x1;
+  }
+}
 
-  currentLine += 4;
-  if (currentLine >= LV_VER_RES_MAX)
-    currentLine = 0;
+void ThinClient::DecodeReceiver(void* cookie, size_t offset, size_t count, uint16_t* pix) {
+  ThinClient* pSelf = reinterpret_cast<ThinClient*>(cookie);
+  // TODO: diff mode
+  if (offset != pSelf->drawPixelsOffset + pSelf->imageBufferOffset) {
+   pSelf->DrawScreen(pSelf->imageBuffer, pSelf->drawPixelsOffset, pSelf->imageBufferOffset);
+   pSelf->drawPixelsOffset = offset;
+   pSelf->imageBufferOffset = 0;
+  }
+  memcpy(pSelf->imageBuffer + pSelf->imageBufferOffset, pix, count*sizeof(uint16_t));
+  pSelf->imageBufferOffset += count;
+  if (pSelf->imageBufferOffset >= IMAGE_BUFFER_SIZE_BYTES/sizeof(lv_color_t)) {
+    pSelf->DrawScreen(pSelf->imageBuffer, pSelf->drawPixelsOffset, pSelf->imageBufferOffset);
+    pSelf->drawPixelsOffset = offset;
+    memcpy(pSelf->imageBuffer, ((uint8_t*) pSelf->imageBuffer) + pSelf->IMAGE_BUFFER_SIZE_BYTES, pSelf->imageBufferOffset*sizeof(lv_color_t) - pSelf->IMAGE_BUFFER_SIZE_BYTES);
+    pSelf->imageBufferOffset = pSelf->imageBufferOffset*sizeof(lv_color_t) - pSelf->IMAGE_BUFFER_SIZE_BYTES;
+  }
 }
 
 Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Controllers::ThinClientService::States state,
@@ -47,44 +71,41 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
   switch (state) {
     case ThinClientService::States::Wait: {
       Image.compressedSize = (buffer[0] << 24) | (buffer[1] << 16) | (buffer[2] << 8) | buffer[3];
-      Image.format = (ImageCompressFormats) buffer[4];
 
       state = ThinClientService::States::ReceiveImage;
+      drawPixelsOffset = 0;
       imageBufferOffset = 0;
+      imageOffset = 0;
       Decompress.compressedOffset = 0;
-      /*LZ4Decompress.compressedOffset = 0;
-      LZ4Decompress.lz4StreamDecode = LZ4_createStreamDecode();*/
+      Decompress.decoder = {};
+      //aw_decoder_init(&Decompress.decoder, DecodeReceiver, this);
       break;
     }
 
     case ThinClientService::States::ReceiveImage: {
-      /*int chunk_size = LZ4_decompress_safe_continue(LZ4Decompress.lz4StreamDecode,
-      (const char*) buffer,
-      (char*) imageBuffer + imageBufferOffset,
-      ThinClientService::CHUNK_SIZE,
-      ThinClientService::CHUNK_SIZE);*/
 
-      /*if (chunk_size <= 0) { // decompress error
-        //LZ4_freeStreamDecode(LZ4Decompress.lz4StreamDecode);
-        state = ThinClientService::States::Wait;
-        break;
+      uint8_t* ptr = buffer;
+      /*while (len) {
+        size_t left = AW_BUFF_SIZE - Decompress.decoder.filled;
+        size_t size = len < left ? len : left;
+
+        memcpy(Decompress.decoder.buff + Decompress.decoder.filled, ptr, size);
+        Decompress.decoder.filled += size;
+
+        aw_decoder_chunk(&Decompress.decoder);
+        len -= size;
+        ptr += size;
       }*/
-      memcpy(((uint8_t*) imageBuffer) + imageBufferOffset, buffer, len);
 
+      DecodeReceiver(this, imageOffset, len/sizeof(uint16_t), reinterpret_cast<uint16_t *>(buffer));
+
+      imageOffset += len/sizeof(uint16_t);
       Decompress.compressedOffset += len;
-      //imageBufferOffset += chunk_size;
-      imageBufferOffset += len;
-
-      if (imageBufferOffset >= IMAGE_BUFFER_SIZE*sizeof(lv_color_t)) {
-        DrawScreen(imageBuffer);
-        memcpy(imageBuffer, ((uint8_t*) imageBuffer) + IMAGE_BUFFER_SIZE*sizeof(lv_color_t), imageBufferOffset - IMAGE_BUFFER_SIZE*sizeof(lv_color_t));
-        imageBufferOffset = imageBufferOffset - IMAGE_BUFFER_SIZE*sizeof(lv_color_t);
-      }
 
       if (Decompress.compressedOffset == Image.compressedSize) {
-        //LZ4_freeStreamDecode(LZ4Decompress.lz4StreamDecode);
+        //aw_decoder_fini(&Decompress.decoder);
+        DrawScreen(imageBuffer, drawPixelsOffset, imageBufferOffset);
         state = ThinClientService::States::Wait;
-        break;
       }
 
       break;

@@ -6,6 +6,7 @@
 #include "systemtask/SystemTask.h"
 
 #include "components/ble/thinClient/ThinClientService.h"
+#include "AstuteDecode.h"
 
 namespace Pinetime {
   namespace Components {
@@ -25,6 +26,8 @@ namespace Pinetime {
 
         bool OnTouchEvent(uint16_t x, uint16_t y) override;
 
+        static void DecodeReceiver(void* cookie, size_t offset, size_t count, uint16_t* pix);
+
         Pinetime::Controllers::ThinClientService::States OnData(Pinetime::Controllers::ThinClientService::States state, uint8_t* buffer, uint8_t len) override;
 
         void Refresh() override;
@@ -34,31 +37,23 @@ namespace Pinetime {
         Pinetime::Components::LittleVgl& lvgl;
         Pinetime::Controllers::ThinClientService& thinClientService;
 
-        uint8_t currentLine = 0;
-
-        enum class ImageCompressFormats : uint8_t {
-          LZ4 = 0x00
-        };
-
         struct {
           uint32_t compressedSize;
-          ImageCompressFormats format;
         } Image;
 
         struct {
           uint32_t compressedOffset;
+          AWDecoder decoder;
         } Decompress;
 
-        /*struct {
-          uint32_t compressedOffset;
-          LZ4_streamDecode_t* lz4StreamDecode;
-        } LZ4Decompress;*/
-
-        static constexpr uint16_t IMAGE_BUFFER_SIZE = LV_HOR_RES_MAX*4;
+        static constexpr uint16_t IMAGE_BUFFER_SIZE_BYTES = 254;
+        uint16_t drawPixelsOffset = 0;
         uint16_t imageBufferOffset = 0;
-        lv_color_t imageBuffer[IMAGE_BUFFER_SIZE + Pinetime::Controllers::ThinClientService::CHUNK_SIZE/2 + 1];
+        lv_color_t imageBuffer[(IMAGE_BUFFER_SIZE_BYTES+AW_BUFF_SIZE+1)/sizeof(lv_color_t)];
 
-        void DrawScreen(lv_color_t* buffer);
+        uint16_t imageOffset = 0;
+
+        void DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count);
 
         lv_task_t* taskRefresh;
       };
