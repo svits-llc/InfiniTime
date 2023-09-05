@@ -90,17 +90,40 @@ int Pinetime::Controllers::ThinClientService::OnCommand(struct ble_gatt_access_c
 }
 
 void Pinetime::Controllers::ThinClientService::setClient(IThinClient* ptr) {
-  thinClient = ptr;
+    thinClient = ptr;
 }
 
-void Pinetime::Controllers::ThinClientService::event(char /*event*/) {
-  /*auto* om = ble_hs_mbuf_from_flat(&event, 1);
+void Pinetime::Controllers::ThinClientService::frameAck(uint8_t id) {
+    event(id);
+}
 
-  uint16_t connectionHandle = nimble.connHandle();
+void Pinetime::Controllers::ThinClientService::logWrite(std::string message) {
+    if (message.length() > LOG_MAX_LENGTH) {
+        return;
+    }
+    event(message.c_str(), message.length());
+}
 
-  if (connectionHandle == 0 || connectionHandle == BLE_HS_CONN_HANDLE_NONE) {
-    return;
-  }
+void Pinetime::Controllers::ThinClientService::event(uint8_t event) {
+    auto* om = ble_hs_mbuf_from_flat(&event, 1);
 
-  ble_gattc_notify_custom(connectionHandle, eventHandle, om);*/
+    uint16_t connectionHandle = nimble.connHandle();
+
+    if (connectionHandle == 0 || connectionHandle == BLE_HS_CONN_HANDLE_NONE) {
+      return;
+    }
+
+    ble_gattc_notify_custom(connectionHandle, eventHandle, om);
+}
+
+void Pinetime::Controllers::ThinClientService::event(const char* event, uint16_t size) {
+    auto* om = ble_hs_mbuf_from_flat(event, size);
+
+    uint16_t connectionHandle = nimble.connHandle();
+
+    if (connectionHandle == 0 || connectionHandle == BLE_HS_CONN_HANDLE_NONE) {
+      return;
+    }
+
+    ble_gattc_notify_custom(connectionHandle, eventHandle, om);
 }

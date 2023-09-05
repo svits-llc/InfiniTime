@@ -39,19 +39,19 @@ namespace Pinetime {
 
         struct {
           uint32_t compressedSize;
+          uint8_t id;
         } Image;
 
         struct {
           uint32_t compressedOffset;
           AWDecoder decoder;
+          bool callbackFirstCall;
         } Decompress;
 
         static constexpr uint16_t IMAGE_BUFFER_SIZE_BYTES = 254;
         uint16_t drawPixelsOffset = 0;
         uint16_t imageBufferOffset = 0;
         lv_color_t imageBuffer[(IMAGE_BUFFER_SIZE_BYTES+AW_BUFF_SIZE+1)/sizeof(lv_color_t)];
-
-        uint16_t imageOffset = 0;
 
         void DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count);
 

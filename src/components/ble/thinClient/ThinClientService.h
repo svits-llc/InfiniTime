@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #define min // workaround: nimble's min/max macros conflict with libstdc++
 #define max
 #include <host/ble_gap.h>
@@ -20,15 +21,19 @@ namespace Pinetime {
 
       void Init();
 
-      void event(char event);
+      void event(uint8_t event);
+
+      void event(const char* event, uint16_t size);
 
       int OnCommand(struct ble_gatt_access_ctxt* ctxt);
 
       enum class States : uint8_t { Wait, ReceiveImage };
 
-      void setClient(IThinClient* client);
+      void setClient(IThinClient* ptr);
 
-      static constexpr uint8_t CHUNK_SIZE = 244;
+      void frameAck(uint8_t id);
+
+      void logWrite(std::string message);
 
     private:
       struct ble_gatt_chr_def characteristicDefinition[3];
@@ -43,6 +48,8 @@ namespace Pinetime {
       uint16_t eventHandle {};
 
       NimbleController& nimble;
+
+      static constexpr uint16_t LOG_MAX_LENGTH = 244;
     };
 
     class IThinClient {
