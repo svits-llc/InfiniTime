@@ -7,6 +7,12 @@ using namespace Pinetime::Applications::Screens;
 ThinClient::ThinClient(System::SystemTask& systemTask, Pinetime::Components::LittleVgl& lvgl, Pinetime::Controllers::ThinClientService& thinClientService)
   : systemTask {systemTask}, lvgl {lvgl}, thinClientService {thinClientService} {
   taskRefresh = lv_task_create(RefreshTaskCallback, LV_DISP_DEF_REFR_PERIOD, LV_TASK_PRIO_MID, this);
+
+  aw_decoder_init(&Decompress.decoder, DecodeReceiver, this);
+  aw_decoder_qr(&Decompress.decoder);
+  aw_decoder_fini(&Decompress.decoder);
+  DrawScreen(imageBuffer, drawPixelsOffset, imageBufferOffset);
+
   thinClientService.setClient(this);
   systemTask.PushMessage(Pinetime::System::Messages::DisableSleeping);
 }
@@ -22,7 +28,10 @@ bool ThinClient::OnTouchEvent(Pinetime::Applications::TouchEvents /*event*/) {
   return true;
 }
 
-bool ThinClient::OnTouchEvent(uint16_t /*x*/, uint16_t /*y*/) {
+bool ThinClient::OnTouchEvent(uint16_t x, uint16_t y) {
+  Events.Touch.x = x;
+  Events.Touch.y = y;
+  Events.Touch.touched = true;
   return true;
 }
 
@@ -45,7 +54,7 @@ void ThinClient::DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count)
 
     //thinClientService.logWrite("x1:"+std::to_string(area.x1)+",y1:"+ std::to_string(area.y1)+
           //                             ",x2:"+std::to_string(area.x2)+",y2:"+ std::to_string(area.y2));
-
+    LogMetric(SEND_SCREEN);
     lvgl.SetFullRefresh(Components::LittleVgl::FullRefreshDirections::None);
     lvgl.FlushDisplay(&area, buffer);
     buffer += area.x2 - area.x1 + 1;
@@ -80,27 +89,31 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
     case ThinClientService::States::Wait: {
       //thinClientService.logWrite("NewImg");
 
+      Image = {};
       Image.compressedSize = (buffer[0] << 24) | (buffer[1] << 16) | (buffer[2] << 8) | buffer[3];
-      Image.id = buffer[4];
+      Image.frameId = buffer[4];
 
       state = ThinClientService::States::ReceiveImage;
 
       drawPixelsOffset = 0;
       imageBufferOffset = 0;
+
       Decompress.compressedOffset = 0;
-      Decompress.decoder = {};
       Decompress.callbackFirstCall = true;
       aw_decoder_init(&Decompress.decoder, DecodeReceiver, this);
       break;
     }
 
     case ThinClientService::States::ReceiveImage: {
+      LogMetric(RECV_PACKET);
+
       uint8_t crc = 0;
       for (uint16_t i = 0; i < len; i++)
           crc += buffer[i];
 
       uint8_t* ptr = buffer;
       uint8_t bufLen = len;
+      LogMetric(START_DECODER);
       while (bufLen) {
         size_t left = AW_BUFF_SIZE - Decompress.decoder.filled;
         size_t size = bufLen < left ? bufLen : left;
@@ -112,13 +125,16 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
         bufLen -= size;
         ptr += size;
       }
+      LogMetric(FINISH_DECODER);
 
       Decompress.compressedOffset += len;
 
       if (Decompress.compressedOffset == Image.compressedSize) {
         aw_decoder_fini(&Decompress.decoder);
         DrawScreen(imageBuffer, drawPixelsOffset, imageBufferOffset);
-        thinClientService.frameAck(Image.id);
+
+        SendEvents(false);
+
         state = ThinClientService::States::Wait;
       }
 
@@ -131,9 +147,87 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
   return state;
 }
 
+void ThinClient::LogMetric(MetricType type) {
+    switch(type) {
+        case RECV_PACKET:
+            recvPacketTimestamps[recvPacketCnt] = lv_tick_get();
+            recvPacketCnt++;
+            break;
+        case START_DECODER:
+            startDecoderTimestamps[startDecoderCnt] = lv_tick_get();
+            startDecoderCnt++;
+            break;
+        case FINISH_DECODER:
+            finishDecoderTimestamps[finishDecoderCnt] = lv_tick_get();
+            finishDecoderCnt++;
+            break;
+        case SEND_SCREEN:
+            sendScreenTimestamps[sendScreenCnt] = lv_tick_get();
+            sendScreenCnt++;
+            break;
+    }
+    if (recvPacketCnt >= MAX_METRIC_CNT || startDecoderCnt >= MAX_METRIC_CNT
+        || finishDecoderCnt >= MAX_METRIC_CNT || sendScreenCnt >= MAX_METRIC_CNT)
+        SendMetrics();
+}
+
+void ThinClient::SendMetrics() {
+    uint8_t metricsLen = 0;
+
+    uint32_t firstTimestamp = recvPacketTimestamps[0];
+
+    metricsLen += sprintf(responseBuffer+metricsLen, "%s", "RP:");
+    for (uint8_t i = 0; i < recvPacketCnt; i++)
+        metricsLen += sprintf(responseBuffer+metricsLen, "%lu,", recvPacketTimestamps[i]-firstTimestamp);
+
+    metricsLen += sprintf(responseBuffer+metricsLen, "%s", "\nSD:");
+    for (uint8_t i = 0; i < startDecoderCnt; i++)
+        metricsLen += sprintf(responseBuffer+metricsLen, "%lu,", startDecoderTimestamps[i]-firstTimestamp);
+
+    metricsLen += sprintf(responseBuffer+metricsLen, "%s", "\nFD:");
+    for (uint8_t i = 0; i < finishDecoderCnt; i++)
+        metricsLen += sprintf(responseBuffer+metricsLen, "%lu,", finishDecoderTimestamps[i]-firstTimestamp);
+
+    metricsLen += sprintf(responseBuffer+metricsLen, "%s", "\nSS:");
+    for (uint8_t i = 0; i < sendScreenCnt; i++)
+        metricsLen += sprintf(responseBuffer+metricsLen, "%lu,", sendScreenTimestamps[i]-firstTimestamp);
+
+    thinClientService.event(responseBuffer, metricsLen);
+
+    recvPacketCnt = 0;
+    startDecoderCnt = 0;
+    finishDecoderCnt = 0;
+    sendScreenCnt = 0;
+}
+
+void ThinClient::SendEvents(bool idle) {
+    std::ignore = idle;
+    /*uint32_t currTimestamp = lv_tick_get();
+    if (idle && currTimestamp - eventsSendTimestamp < SEND_EVENTS_PERIOD)
+        return;
+    eventsSendTimestamp = currTimestamp;
+
+    uint8_t eventLen = 0;
+    strcpy(responseBuffer, startEvents);
+    eventLen += strlen(startEvents);
+
+    if (!idle)
+        eventLen += sprintf(responseBuffer+eventLen, frameEventFmt, Image.frameId);
+    if (Events.Touch.touched) {
+        if (eventLen > 1) {
+            strcpy(responseBuffer+eventLen, nextEventDelimiter);
+            eventLen += strlen(nextEventDelimiter);
+        }
+        eventLen += sprintf(responseBuffer+eventLen, touchEventFmt, Events.Touch.x, Events.Touch.y);
+    }
+
+    strcpy(responseBuffer+eventLen, endEvents);
+    eventLen += strlen(endEvents);
+
+    thinClientService.event(responseBuffer, eventLen);
+    Events = {};*/
+}
+
 void ThinClient::Refresh() {
-  /*if (thinClientService.getFrame(currentFrame)) {
-    lvgl.SetFullRefresh(Components::LittleVgl::FullRefreshDirections::None);
-    lvgl.FlushDisplay(&currentFrame.area, currentFrame.data);
-  }*/
+    SendEvents(true);
 }

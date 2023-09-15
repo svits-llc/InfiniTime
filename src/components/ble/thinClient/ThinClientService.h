@@ -23,7 +23,7 @@ namespace Pinetime {
 
       void event(uint8_t event);
 
-      void event(const char* event, uint16_t size);
+      void event(const char* data, uint16_t size);
 
       int OnCommand(struct ble_gatt_access_ctxt* ctxt);
 
@@ -31,7 +31,7 @@ namespace Pinetime {
 
       void setClient(IThinClient* ptr);
 
-      void frameAck(uint8_t id);
+      static constexpr uint8_t CHUNK_SIZE = 244;
 
       void logWrite(std::string message);
 

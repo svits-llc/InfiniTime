@@ -93,10 +93,6 @@ void Pinetime::Controllers::ThinClientService::setClient(IThinClient* ptr) {
     thinClient = ptr;
 }
 
-void Pinetime::Controllers::ThinClientService::frameAck(uint8_t id) {
-    event(id);
-}
-
 void Pinetime::Controllers::ThinClientService::logWrite(std::string message) {
     if (message.length() > LOG_MAX_LENGTH) {
         return;
@@ -116,8 +112,8 @@ void Pinetime::Controllers::ThinClientService::event(uint8_t event) {
     ble_gattc_notify_custom(connectionHandle, eventHandle, om);
 }
 
-void Pinetime::Controllers::ThinClientService::event(const char* event, uint16_t size) {
-    auto* om = ble_hs_mbuf_from_flat(event, size);
+void Pinetime::Controllers::ThinClientService::event(const char* data, uint16_t size) {
+    auto* om = ble_hs_mbuf_from_flat(data, size);
 
     uint16_t connectionHandle = nimble.connHandle();
 

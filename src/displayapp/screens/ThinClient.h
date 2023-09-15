@@ -37,25 +37,61 @@ namespace Pinetime {
         Pinetime::Components::LittleVgl& lvgl;
         Pinetime::Controllers::ThinClientService& thinClientService;
 
+        char responseBuffer[Pinetime::Controllers::ThinClientService::CHUNK_SIZE];
+
         struct {
-          uint32_t compressedSize;
-          uint8_t id;
+          uint32_t compressedSize = 0;
+          uint8_t frameId = 0;
         } Image;
 
         struct {
-          uint32_t compressedOffset;
-          AWDecoder decoder;
-          bool callbackFirstCall;
+          uint32_t compressedOffset = 0;
+          AWDecoder decoder = {};
+          bool callbackFirstCall = true;
         } Decompress;
 
-        static constexpr uint16_t IMAGE_BUFFER_SIZE_BYTES = 254;
+        struct {
+            struct {
+                uint8_t x = 0;
+                uint8_t y = 0;
+                bool touched = false;
+            } Touch;
+        } Events;
+        uint32_t eventsSendTimestamp = 0;
+
+        static constexpr uint16_t IMAGE_BUFFER_SIZE_BYTES = 254*5;
         uint16_t drawPixelsOffset = 0;
         uint16_t imageBufferOffset = 0;
-        lv_color_t imageBuffer[(IMAGE_BUFFER_SIZE_BYTES+AW_BUFF_SIZE+1)/sizeof(lv_color_t)];
+        lv_color_t imageBuffer[(IMAGE_BUFFER_SIZE_BYTES + 254)/sizeof(lv_color_t)];
 
         void DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count);
 
+        static constexpr const char* touchEventFmt = R"("x":%d,"y":%d)";
+        static constexpr const char* frameEventFmt = R"("frame":%d)";
+        static constexpr const char* nextEventDelimiter = ",";
+        static constexpr const char* startEvents = "{";
+        static constexpr const char* endEvents = "}";
+        static constexpr uint16_t SEND_EVENTS_PERIOD = 500;
+        void SendEvents(bool idle);
         lv_task_t* taskRefresh;
+
+        enum MetricType {
+            RECV_PACKET,
+            START_DECODER,
+            FINISH_DECODER,
+            SEND_SCREEN
+        };
+        void LogMetric(MetricType type);
+        void SendMetrics();
+        static constexpr const uint8_t MAX_METRIC_CNT = 10;
+        uint32_t recvPacketTimestamps[MAX_METRIC_CNT];
+        uint8_t recvPacketCnt = 0;
+        uint32_t startDecoderTimestamps[MAX_METRIC_CNT];
+        uint8_t startDecoderCnt = 0;
+        uint32_t finishDecoderTimestamps[MAX_METRIC_CNT];
+        uint8_t finishDecoderCnt = 0;
+        uint32_t sendScreenTimestamps[MAX_METRIC_CNT];
+        uint8_t sendScreenCnt = 0;
       };
     }
   }
