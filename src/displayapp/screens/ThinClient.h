@@ -43,6 +43,7 @@ namespace Pinetime {
           uint32_t compressedSize = 0;
           uint8_t frameId = 0;
         } Image;
+        bool qrDrawn = false;
 
         struct {
           uint32_t compressedOffset = 0;
@@ -59,12 +60,16 @@ namespace Pinetime {
         } Events;
         uint32_t eventsSendTimestamp = 0;
 
-        static constexpr uint16_t IMAGE_BUFFER_SIZE_BYTES = 254*5;
+        /*static constexpr uint16_t IMAGE_BUFFER_SIZE_BYTES = 254*5;
         uint16_t drawPixelsOffset = 0;
         uint16_t imageBufferOffset = 0;
-        lv_color_t imageBuffer[(IMAGE_BUFFER_SIZE_BYTES + 254)/sizeof(lv_color_t)];
+        lv_color_t imageBuffer[(IMAGE_BUFFER_SIZE_BYTES + 254)/sizeof(lv_color_t)];*/
+        uint8_t currentLine = 0;
+        static constexpr uint16_t IMAGE_BUFFER_SIZE = LV_HOR_RES_MAX * 4;
+        uint16_t imageBufferOffset = 0;
+        lv_color_t imageBuffer[IMAGE_BUFFER_SIZE + Pinetime::Controllers::ThinClientService::CHUNK_SIZE/2 + 1];
 
-        void DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count);
+        void DrawScreen(lv_color_t* buffer/*, uint16_t offset, uint16_t count*/);
 
         static constexpr const char* touchEventFmt = R"("x":%d,"y":%d)";
         static constexpr const char* frameEventFmt = R"("frame":%d)";
@@ -76,22 +81,22 @@ namespace Pinetime {
         lv_task_t* taskRefresh;
 
         enum MetricType {
-            RECV_PACKET,
             START_DECODER,
             FINISH_DECODER,
-            SEND_SCREEN
+            SEND_SCREEN,
+            END_SCREEN
         };
         void LogMetric(MetricType type);
         void SendMetrics();
         static constexpr const uint8_t MAX_METRIC_CNT = 10;
-        uint32_t recvPacketTimestamps[MAX_METRIC_CNT];
-        uint8_t recvPacketCnt = 0;
         uint32_t startDecoderTimestamps[MAX_METRIC_CNT];
         uint8_t startDecoderCnt = 0;
         uint32_t finishDecoderTimestamps[MAX_METRIC_CNT];
         uint8_t finishDecoderCnt = 0;
         uint32_t sendScreenTimestamps[MAX_METRIC_CNT];
         uint8_t sendScreenCnt = 0;
+        uint32_t endScreenTimestamps[MAX_METRIC_CNT];
+        uint8_t endScreenCnt = 0;
       };
     }
   }
