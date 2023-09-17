@@ -153,7 +153,7 @@ inline int aw_decoder_chunk(AWDecoder* decoder)
             if (decoder->bpp < 16)
             {
                 decoder->operation = eoPalette;
-                decoder->expect = 2 << decoder->bpp;
+                decoder->expect = sizeof(aw_counter_t) + (2 << decoder->bpp);
             }
             else
             {
@@ -377,6 +377,8 @@ inline int aw_decoder_chunk(AWDecoder* decoder)
 
 inline int aw_decoder_fini(AWDecoder* decoder)
 {
+    if (!decoder->offset) //empty run, maybe QR
+        return 0;
     size_t bytes_left = AW_BUFF_SIZE - decoder->filled;
     const size_t noop = sizeof(aw_counter_t) + sizeof(aw_rgb565_t);
     if (bytes_left > noop)
