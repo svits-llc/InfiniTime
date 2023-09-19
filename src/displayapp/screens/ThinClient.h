@@ -6,7 +6,7 @@
 #include "systemtask/SystemTask.h"
 
 #include "components/ble/thinClient/ThinClientService.h"
-#include "AstuteDecode.h"
+#include "astute-compression/AstuteDecode.h"
 
 namespace Pinetime {
   namespace Components {

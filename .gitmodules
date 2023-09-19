@@ -10,3 +10,6 @@
 [submodule "src/libs/arduinoFFT"]
 	path = src/libs/arduinoFFT
 	url = https://github.com/kosme/arduinoFFT.git
+[submodule "src/displayapp/screens/astute-compression"]
+	path = src/displayapp/screens/astute-compression
+	url = https://github.com/svits-llc/astute-compression
