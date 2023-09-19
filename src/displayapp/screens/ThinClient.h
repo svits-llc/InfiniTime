@@ -48,7 +48,6 @@ namespace Pinetime {
         struct {
           uint32_t compressedOffset = 0;
           AWDecoder decoder = {};
-          bool callbackFirstCall = true;
         } Decompress;
 
         struct {
@@ -60,16 +59,7 @@ namespace Pinetime {
         } Events;
         uint32_t eventsSendTimestamp = 0;
 
-        /*static constexpr uint16_t IMAGE_BUFFER_SIZE_BYTES = 254*5;
-        uint16_t drawPixelsOffset = 0;
-        uint16_t imageBufferOffset = 0;
-        lv_color_t imageBuffer[(IMAGE_BUFFER_SIZE_BYTES + 254)/sizeof(lv_color_t)];*/
-        uint8_t currentLine = 0;
-        static constexpr uint16_t IMAGE_BUFFER_SIZE = LV_HOR_RES_MAX * 4;
-        uint16_t imageBufferOffset = 0;
-        lv_color_t imageBuffer[IMAGE_BUFFER_SIZE + Pinetime::Controllers::ThinClientService::CHUNK_SIZE/2 + 1];
-
-        void DrawScreen(lv_color_t* buffer/*, uint16_t offset, uint16_t count*/);
+        void DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count);
 
         static constexpr const char* touchEventFmt = R"("x":%d,"y":%d)";
         static constexpr const char* frameEventFmt = R"("frame":%d)";

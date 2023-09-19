@@ -30,15 +30,15 @@ bool ThinClient::OnTouchEvent(uint16_t x, uint16_t y) {
   return true;
 }
 
-void ThinClient::DrawScreen(lv_color_t* buffer/*, uint16_t offset, uint16_t count*/) {
-  /*uint16_t offsetEnd = offset + count - 1;
+void ThinClient::DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count) {
+  uint16_t offsetEnd = offset + count - 1;
 
   uint16_t startLine = offset / LV_HOR_RES_MAX;
   uint16_t endLine = offsetEnd / LV_HOR_RES_MAX;
   for (uint16_t currLine = startLine; currLine <= endLine; currLine++) {
     lv_area_t area = {
       .x1 = 0,
-      .y1 = currLine,
+      .y1 =  currLine,
       .x2 = LV_HOR_RES_MAX - 1,
       .y2 = currLine
     };
@@ -52,27 +52,12 @@ void ThinClient::DrawScreen(lv_color_t* buffer/*, uint16_t offset, uint16_t coun
     //LogMetric(SEND_SCREEN);
     lvgl.SetFullRefresh(Components::LittleVgl::FullRefreshDirections::None);
     lvgl.FlushDisplay(&area, buffer);
+    //LogMetric(END_SCREEN);
     buffer += area.x2 - area.x1 + 1;
-  }*/
-  lv_area_t area = {
-          .x1 = 0,
-          .y1 = currentLine,
-          .x2 = LV_HOR_RES_MAX - 1,
-          .y2 = currentLine + 3
-  };
-
-  LogMetric(SEND_SCREEN);
-  lvgl.SetFullRefresh(Components::LittleVgl::FullRefreshDirections::None);
-  lvgl.FlushDisplay(&area, buffer);
-  LogMetric(END_SCREEN);
-
-  currentLine += 4;
-  if (currentLine >= LV_VER_RES_MAX)
-      currentLine = 0;
+  }
 }
 
 void ThinClient::DecodeReceiver(void* cookie, size_t offset, size_t count, uint16_t* pix) {
-  std::ignore = offset;
   ThinClient* pSelf = reinterpret_cast<ThinClient*>(cookie);
 
   /*//pSelf->thinClientService.logWrite("Off:"+ std::to_string(offset)+",Cnt:"+ std::to_string(count));
@@ -90,13 +75,7 @@ void ThinClient::DecodeReceiver(void* cookie, size_t offset, size_t count, uint1
   memcpy(pSelf->imageBuffer + pSelf->imageBufferOffset, pix, count*sizeof(uint16_t));
   pSelf->imageBufferOffset += count;*/
 
-  memcpy(pSelf->imageBuffer + pSelf->imageBufferOffset, pix, count*sizeof(uint16_t));
-  pSelf->imageBufferOffset += count;
-  if (pSelf->imageBufferOffset >= IMAGE_BUFFER_SIZE) {
-      pSelf->DrawScreen(pSelf->imageBuffer);
-      memcpy(pSelf->imageBuffer, ((uint8_t*) pSelf->imageBuffer) + IMAGE_BUFFER_SIZE*sizeof(lv_color_t), (pSelf->imageBufferOffset - IMAGE_BUFFER_SIZE)*sizeof(lv_color_t));
-      pSelf->imageBufferOffset = pSelf->imageBufferOffset - IMAGE_BUFFER_SIZE;
-  }
+  pSelf->DrawScreen((lv_color_t*) pix, offset, count);
 }
 
 Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Controllers::ThinClientService::States state,
@@ -114,11 +93,8 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
 
       state = ThinClientService::States::ReceiveImage;
 
-      //drawPixelsOffset = 0;
-      imageBufferOffset = 0;
 
       Decompress.compressedOffset = 0;
-      Decompress.callbackFirstCall = true;
       aw_decoder_init(&Decompress.decoder, DecodeReceiver, this);
       break;
     }
@@ -143,7 +119,7 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
       Decompress.compressedOffset += len;
 
       if (Decompress.compressedOffset == Image.compressedSize) {
-        aw_decoder_fini(&Decompress.decoder);
+        aw_decoder_fini(&Decompress.decoder, false);
         //DrawScreen(imageBuffer, drawPixelsOffset, imageBufferOffset);
 
         SendEvents(false);
@@ -250,7 +226,7 @@ void ThinClient::Refresh() {
     if (!qrDrawn) {
         aw_decoder_init(&Decompress.decoder, DecodeReceiver, this);
         aw_decoder_qr(&Decompress.decoder);
-        aw_decoder_fini(&Decompress.decoder);
+        aw_decoder_fini(&Decompress.decoder, false);
         //DrawScreen(imageBuffer, drawPixelsOffset, imageBufferOffset);
         qrDrawn = true;
     }
