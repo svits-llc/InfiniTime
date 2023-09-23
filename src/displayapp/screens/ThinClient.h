@@ -7,6 +7,7 @@
 
 #include "components/ble/thinClient/ThinClientService.h"
 #include "astute-compression/AstuteDecode.h"
+#include "astute-compression/aw_profile.h"
 
 namespace Pinetime {
   namespace Components {
@@ -36,8 +37,6 @@ namespace Pinetime {
         Pinetime::System::SystemTask& systemTask;
         Pinetime::Components::LittleVgl& lvgl;
         Pinetime::Controllers::ThinClientService& thinClientService;
-
-        char responseBuffer[Pinetime::Controllers::ThinClientService::CHUNK_SIZE];
 
         struct {
           uint32_t compressedSize = 0;
@@ -76,17 +75,9 @@ namespace Pinetime {
             SEND_SCREEN,
             END_SCREEN
         };
+        AWProfiler Profiler = {};
         void LogMetric(MetricType type);
         void SendMetrics();
-        static constexpr const uint8_t MAX_METRIC_CNT = 10;
-        uint32_t startDecoderTimestamps[MAX_METRIC_CNT];
-        uint8_t startDecoderCnt = 0;
-        uint32_t finishDecoderTimestamps[MAX_METRIC_CNT];
-        uint8_t finishDecoderCnt = 0;
-        uint32_t sendScreenTimestamps[MAX_METRIC_CNT];
-        uint8_t sendScreenCnt = 0;
-        uint32_t endScreenTimestamps[MAX_METRIC_CNT];
-        uint8_t endScreenCnt = 0;
       };
     }
   }

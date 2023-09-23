@@ -1,4 +1,6 @@
 #include "displayapp/screens/ThinClient.h"
+
+#include <cstddef>
 #include "displayapp/DisplayApp.h"
 #include "displayapp/LittleVgl.h"
 
@@ -7,6 +9,8 @@ using namespace Pinetime::Applications::Screens;
 ThinClient::ThinClient(System::SystemTask& systemTask, Pinetime::Components::LittleVgl& lvgl, Pinetime::Controllers::ThinClientService& thinClientService)
   : systemTask {systemTask}, lvgl {lvgl}, thinClientService {thinClientService} {
   taskRefresh = lv_task_create(RefreshTaskCallback, LV_DISP_DEF_REFR_PERIOD, LV_TASK_PRIO_MID, this);
+
+  aw_profiler_init(&Profiler, Pinetime::Controllers::ThinClientService::CHUNK_SIZE);
 
   thinClientService.setClient(this);
   systemTask.PushMessage(Pinetime::System::Messages::DisableSleeping);
@@ -49,10 +53,10 @@ void ThinClient::DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count)
 
     //thinClientService.logWrite("x1:"+std::to_string(area.x1)+",y1:"+ std::to_string(area.y1)+
           //                             ",x2:"+std::to_string(area.x2)+",y2:"+ std::to_string(area.y2));
-    //LogMetric(SEND_SCREEN);
+    LogMetric(SEND_SCREEN);
     lvgl.SetFullRefresh(Components::LittleVgl::FullRefreshDirections::None);
     lvgl.FlushDisplay(&area, buffer);
-    //LogMetric(END_SCREEN);
+    LogMetric(END_SCREEN);
     buffer += area.x2 - area.x1 + 1;
   }
 }
@@ -103,17 +107,24 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
       uint8_t* ptr = buffer;
       uint8_t bufLen = len;
       LogMetric(START_DECODER);
+
       while (bufLen) {
-        size_t left = AW_BUFF_SIZE - Decompress.decoder.filled;
-        size_t size = bufLen < left ? bufLen : left;
+          size_t left = 0;
+          void* tail = aw_get_tail(&Decompress.decoder, left);
+          assert(left);
 
-        memcpy(Decompress.decoder.buff + Decompress.decoder.filled, ptr, size);
-        Decompress.decoder.filled += size;
+          size_t size = bufLen < left ? bufLen : left;
 
-        aw_decoder_chunk(&Decompress.decoder);
-        bufLen -= size;
-        ptr += size;
+          memcpy(tail, ptr, size);
+          Decompress.decoder.filled += size;
+
+          int res = aw_decoder_chunk(&Decompress.decoder);
+          std::ignore = res;
+          assert(0 == res);
+          bufLen -= size;
+          ptr += size;
       }
+
       LogMetric(FINISH_DECODER);
 
       Decompress.compressedOffset += len;
@@ -137,65 +148,22 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
 }
 
 void ThinClient::LogMetric(MetricType type) {
-    std::ignore = type;
-    /*switch(type) {
-        case START_DECODER:
-            startDecoderTimestamps[startDecoderCnt] = lv_tick_get();
-            startDecoderCnt++;
-            break;
-        case FINISH_DECODER:
-            finishDecoderTimestamps[finishDecoderCnt] = lv_tick_get();
-            finishDecoderCnt++;
-            break;
-        case SEND_SCREEN:
-            sendScreenTimestamps[sendScreenCnt] = lv_tick_get();
-            sendScreenCnt++;
-            break;
-        case END_SCREEN:
-            endScreenTimestamps[endScreenCnt] = lv_tick_get();
-            endScreenCnt++;
-            break;
+    aw_profiler_sample(&Profiler, (uint8_t) type, (size_t) lv_tick_get()*1000);
+    if (Profiler.filled == Profiler.total) {
+        SendMetrics();
+        aw_profiler_fini(&Profiler);
+        Profiler = {};
+        aw_profiler_init(&Profiler, Pinetime::Controllers::ThinClientService::CHUNK_SIZE);
     }
-    if (startDecoderCnt >= MAX_METRIC_CNT || finishDecoderCnt >= MAX_METRIC_CNT
-    || sendScreenCnt >= MAX_METRIC_CNT || endScreenCnt >= MAX_METRIC_CNT)
-        SendMetrics();*/
 }
 
 void ThinClient::SendMetrics() {
-    /*
-    uint8_t metricsLen = 0;
-
-    uint32_t firstTimestamp = UINT32_MAX;
-    if (startDecoderTimestamps[0] < firstTimestamp) firstTimestamp = startDecoderTimestamps[0];
-    if (finishDecoderTimestamps[0] < firstTimestamp) firstTimestamp = finishDecoderTimestamps[0];
-    if (sendScreenTimestamps[0] < firstTimestamp) firstTimestamp = sendScreenTimestamps[0];
-    if (endScreenTimestamps[0] < firstTimestamp) firstTimestamp = endScreenTimestamps[0];
-
-    metricsLen += sprintf(responseBuffer+metricsLen, "%s", "SD:");
-    for (uint8_t i = 0; i < startDecoderCnt; i++)
-        metricsLen += sprintf(responseBuffer+metricsLen, "%d,", int16_t (startDecoderTimestamps[i]-firstTimestamp));
-
-    metricsLen += sprintf(responseBuffer+metricsLen, "%s", "\nFD:");
-    for (uint8_t i = 0; i < finishDecoderCnt; i++)
-        metricsLen += sprintf(responseBuffer+metricsLen, "%d,", int16_t (finishDecoderTimestamps[i]-firstTimestamp));
-
-    metricsLen += sprintf(responseBuffer+metricsLen, "%s", "\nSS:");
-    for (uint8_t i = 0; i < sendScreenCnt; i++)
-        metricsLen += sprintf(responseBuffer+metricsLen, "%d,", int16_t (sendScreenTimestamps[i]-firstTimestamp));
-
-    metricsLen += sprintf(responseBuffer+metricsLen, "%s", "\nES:");
-    for (uint8_t i = 0; i < endScreenCnt; i++)
-        metricsLen += sprintf(responseBuffer+metricsLen, "%d,", int16_t (endScreenTimestamps[i]-firstTimestamp));
-
-    thinClientService.event(responseBuffer, metricsLen);
-
-    startDecoderCnt = 0;
-    finishDecoderCnt = 0;
-    sendScreenCnt = 0;
-    endScreenCnt = 0;*/
+    thinClientService.event((const char*) Profiler.records, Pinetime::Controllers::ThinClientService::CHUNK_SIZE);
 }
 
 void ThinClient::SendEvents(bool idle) {
+    std::ignore = idle;
+    /*
     uint32_t currTimestamp = lv_tick_get();
     if (idle && currTimestamp - eventsSendTimestamp < SEND_EVENTS_PERIOD)
         return;
@@ -219,7 +187,7 @@ void ThinClient::SendEvents(bool idle) {
     eventLen += strlen(endEvents);
 
     thinClientService.event(responseBuffer, eventLen);
-    Events = {};
+    Events = {};*/
 }
 
 void ThinClient::Refresh() {
