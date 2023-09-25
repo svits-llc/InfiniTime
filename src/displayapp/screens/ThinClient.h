@@ -72,8 +72,12 @@ namespace Pinetime {
         enum MetricType {
             START_DECODER,
             FINISH_DECODER,
-            SEND_SCREEN,
-            END_SCREEN
+            START_RECV_PACKET,
+            END_RECV_PACKET,
+            START_RECV_FRAME,
+            END_RECV_FRAME,
+            START_SEND_METRICS,
+            END_SEND_METRICS
         };
         AWProfiler Profiler = {};
         void LogMetric(MetricType type);

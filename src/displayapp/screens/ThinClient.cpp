@@ -53,10 +53,10 @@ void ThinClient::DrawScreen(lv_color_t* buffer, uint16_t offset, uint16_t count)
 
     //thinClientService.logWrite("x1:"+std::to_string(area.x1)+",y1:"+ std::to_string(area.y1)+
           //                             ",x2:"+std::to_string(area.x2)+",y2:"+ std::to_string(area.y2));
-    LogMetric(SEND_SCREEN);
+    //LogMetric(SEND_SCREEN);
     lvgl.SetFullRefresh(Components::LittleVgl::FullRefreshDirections::None);
     lvgl.FlushDisplay(&area, buffer);
-    LogMetric(END_SCREEN);
+    //LogMetric(END_SCREEN);
     buffer += area.x2 - area.x1 + 1;
   }
 }
@@ -87,8 +87,11 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
            uint8_t len) {
   using namespace Pinetime::Controllers;
 
+  LogMetric(START_RECV_PACKET);
+
   switch (state) {
     case ThinClientService::States::Wait: {
+      LogMetric(START_RECV_FRAME);
       //thinClientService.logWrite("NewImg");
 
       Image = {};
@@ -135,6 +138,7 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
 
         SendEvents(false);
 
+        LogMetric(END_RECV_FRAME);
         state = ThinClientService::States::Wait;
       }
 
@@ -144,16 +148,21 @@ Pinetime::Controllers::ThinClientService::States ThinClient::OnData(Pinetime::Co
     default:
       break;
   }
+  LogMetric(END_RECV_PACKET);
   return state;
 }
 
 void ThinClient::LogMetric(MetricType type) {
     aw_profiler_sample(&Profiler, (uint8_t) type, (size_t) lv_tick_get()*1000);
     if (Profiler.filled == Profiler.total) {
+        size_t sendMetricsTimestamp = lv_tick_get()*1000;
         SendMetrics();
         aw_profiler_fini(&Profiler);
         Profiler = {};
         aw_profiler_init(&Profiler, Pinetime::Controllers::ThinClientService::CHUNK_SIZE);
+
+        aw_profiler_sample(&Profiler, (uint8_t) START_SEND_METRICS, (size_t) sendMetricsTimestamp);
+        aw_profiler_sample(&Profiler, (uint8_t) END_SEND_METRICS, (size_t) lv_tick_get()*1000);
     }
 }
 
